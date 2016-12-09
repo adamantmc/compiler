@@ -31,7 +31,8 @@ mulop → * | /
 factor → ( expression ) | var | NUM
 ```
 The target machine was MIX (https://en.wikipedia.org/wiki/MIX), and you will need to download the MIX Development Kit 
-(https://www.gnu.org/software/mdk/) in order to run the compiler successfully.
+(https://www.gnu.org/software/mdk/) in order to run the compiler successfully. You will also need yacc and flex, for the
+parser and the lexer respectively.
 
 Be forewarned: there are quite a few points where i print debugging messages, and i was too bored to remove them.
 You can compile with ```make.sh``` and test with ```test.sh```.
