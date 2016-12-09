@@ -1,0 +1,22 @@
+int array[10];
+int i;
+
+i = 0;
+
+while(i <= 9) {
+    array[i] = i;
+    i = i + 1;
+}
+
+print array[4] == 4;
+
+print array[i = 9];
+
+print array[7] = 7;
+
+/*
+Expected output:
+1
+array[9] (9)
+7
+*/

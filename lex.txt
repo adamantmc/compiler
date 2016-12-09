@@ -1,0 +1,47 @@
+%{
+#include <stdio.h>
+#include <string.h>
+#include "y.tab.h"
+#include "dynstack.h"
+
+int print = 1;
+int scope = 0;
+%}
+
+%option yylineno
+
+%%
+
+"else" {if(print) printf("\n%s KEYWORD ",yytext); return ELSE;}
+"if" {if(print) printf("\n%s KEYWORD ",yytext); return IF;}
+"int" {if(print) printf("\n%s KEYWORD ",yytext); return INT;}
+"while" {if(print) printf("\n%s KEYWORD ",yytext); return WHILE;}
+"print" {if(print) printf("\n%s KEYWORD ",yytext); return PRINT;}
+"(" {if(print) printf("\n%s LEFT PARENTHESIS ",yytext); return LPAR; }
+")" {if(print) printf("\n%s RIGHT PARENTHESIS ",yytext); return RPAR; }
+"+" {if(print) printf("\n%s OPERATOR ",yytext);  return PLUS;}
+"-" {if(print) printf("\n%s OPERATOR ",yytext);  return MINUS;}
+"*" {if(print) printf("\n%s OPERATOR ",yytext);  return MUL;}
+"/" {if(print) printf("\n%s OPERATOR ",yytext);  return DIV;}
+"<" {if(print) printf("\n%s OPERATOR ",yytext);   return LESS;}
+"<=" {if(print) printf("\n%s OPERATOR ",yytext);  return LESS_EQ;}
+"=" {if(print) printf("\n%s ASSIGN ",yytext);  return ASSIGN;}
+"==" {if(print) printf("\n%s OPERATOR ",yytext);  return EQ;}
+">=" {if(print) printf("\n%s OPERATOR ",yytext);  return GREATER_EQ;}
+"!=" {if(print) printf("\n%s OPERATOR ",yytext);  return NEQ;}
+">" {if(print) printf("\n%s OPERATOR ",yytext);   return GREATER;}
+";" {if(print) printf("\n%s SEMICOLON ",yytext);  return SEMICOLON;}
+"," {if(print) printf("\n%s COMMA ",yytext);  return COMMA;}
+"[" {if(print) printf("\n%s LEFT BRACE ",yytext); return LBRACE;}
+"]" {if(print) printf("\n%s RIGHT BRACE ",yytext); return RBRACE;}
+"{" {if(print) printf("\n%s LEFT BRACKET ",yytext); scope++; scope_stack_push(scope);  return LBRACKET;}
+"}" {if(print) printf("\n%s RIGHT BRACKET ",yytext); scope = scope_stack_pop(); return RBRACKET;}
+
+[1-9][0-9]* {if(print) printf("\n%s INT LITERAL ",yytext); yylval.yint=atoi(yytext); return INT_LITERAL;}
+"0" {if(print) printf("\n%s INT LITERAL ",yytext); yylval.yint=atoi(yytext); return INT_LITERAL;}
+[a-zA-Z][a-zA-Z0-9]* {if(print) printf("\n%s ID ",yytext); strcpy(yylval.ystr,yytext); return ID;}
+"/*"([^*]|\*+[^*/])*\*+"/" {printf("Comments ");}
+\n { }                   /* ignore end of line */;
+[ \t]+                  /* ignore whitespace */;
+
+%%

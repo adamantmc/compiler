@@ -1,0 +1,406 @@
+%{
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "code_gen.h"
+#include "dynstack.h"
+#include "code_templates.h"
+
+#define DEBUG_PRINT_ALL 0
+#define DEBUG_PRINT_TERMS 0
+
+Node *root;
+
+int *error;
+int curr_addr = 0;
+FILE *file;
+extern int scope;
+
+extern int print, yylineno;
+
+void yyerror(const char *str)
+{
+        fprintf(stderr,"Error: %s at line %d\n",str, yylineno);
+        *error = 1;
+}
+
+int yywrap()
+{
+        return 1;
+}
+
+int main()
+{
+    scope_stack_init();
+    scope_stack_push(0);
+
+    error = (int *) malloc(sizeof(int));
+    *error = 0;
+
+    makeSymbolTable(HASH_DEF_SIZE);
+
+    yyparse();
+
+    //traverse(root,st,error);
+
+    if(*error == 0) {
+        printf("\nAbstract Syntax Tree:\n");
+	printTree(root,0);
+	printf("\nSymbol Table:\n");
+	printSymbolTable();
+        scope_stack_init();
+        scope = 0;
+        scope_stack_push(0);
+        file = fopen("output.mixal", "w");
+        emitStartingCode(curr_addr);
+        codeGeneration(root);
+        emitEndCode();
+        fclose(file);
+        printSymbolTable();
+    }
+}
+
+%}
+
+%union {
+    int yint;
+    char ystr[256];
+    struct _Node *node;
+}
+
+%token IF INT WHILE PRINT LPAR RPAR PLUS MINUS MUL DIV LESS LESS_EQ ASSIGN EQ GREATER_EQ NEQ GREATER SEMICOLON COMMA LBRACE RBRACE LBRACKET RBRACKET
+
+%nonassoc NO_ELSE
+%nonassoc ELSE
+
+%token <yint> INT_LITERAL
+%token <ystr> ID
+
+%right UMINUS
+%left LESS LESS_EQ GREATER GREATER_EQ EQ NEQ
+%left PLUS MINUS
+%left MUL DIV
+
+%type <node> program decl_list declaration stat_list statement type_specifier expression_statement compound_statement selection_statement iteration_statement print_statement local_declarations expression simple_expression additive_expression var factor term mulop addop relop
+%%
+
+program: decl_list stat_list
+    {
+        if(DEBUG_PRINT_TERMS) printf("Program Start\n");
+        root = makeNode(programNode, -1, NULL, $1, $2, NULL);
+    }
+;
+
+decl_list: decl_list declaration
+    {
+        if(DEBUG_PRINT_ALL) printf("Declare List\n");
+        $$ = makeNode(declListNode,-1,NULL,$1,$2,NULL);
+    }
+|
+declaration
+    {
+        $$ = $1;
+    }
+;
+
+declaration: type_specifier ID SEMICOLON
+    {
+        if(DEBUG_PRINT_ALL) printf("Declaration, non array.\n");
+        $$ = makeNode(declNode, -1, $2, $1, NULL, NULL);
+
+        Symbol *symbol = makeSymbol(INTEGER_TYPE, $2, scope);
+        symbol->address = curr_addr;
+
+        if(exists(symbol) == -1) {
+            insertSymbol(symbol);
+            curr_addr ++;
+        }
+        else {
+            fprintf(stderr, "Error at line %d: Variable %s has already been declared in this scope.\n", yylineno, $2);
+            *error = 1;
+        }
+    }
+|
+type_specifier ID LBRACE INT_LITERAL RBRACE SEMICOLON
+    {
+        if(DEBUG_PRINT_ALL) printf("Declaration, array.\n");
+        $$ = makeNode(declNode, $4, $2, $1, NULL, NULL);
+
+        Symbol *symbol = makeSymbol(INTEGER_TYPE, $2, scope);
+        symbol->address = curr_addr;
+        symbol->arr_dim = $4;
+
+        if(exists(symbol) == -1) {
+            insertSymbol(symbol);
+            curr_addr += $4;
+        }
+        else {
+            fprintf(stderr, "Error at line %d: Variable %s has already been declared in this scope.\n", yylineno, $2);
+            *error = 1;
+        }
+    }
+;
+
+type_specifier: INT
+    {
+        if(DEBUG_PRINT_ALL) printf("Type Specifier\n");
+        $$ = makeNode(typeSpecifierNode, -1, "INT", NULL, NULL, NULL);
+    }
+;
+
+stat_list: /*empty*/
+    {
+        if(DEBUG_PRINT_ALL) printf("Empty Statement List\n");
+        $$ = makeNode(empStatListNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+stat_list statement
+    {
+        if(DEBUG_PRINT_ALL) printf("Statement List\n");
+        $$ = makeNode(statListNode, -1, NULL, $1, $2, NULL);
+    }
+;
+
+statement: expression_statement
+    {
+        $$ = $1;
+    }
+|
+compound_statement
+    {
+        $$ = $1;
+    }
+|
+selection_statement
+    {
+        $$ = $1;
+    }
+|
+iteration_statement
+    {
+        $$ = $1;
+    }
+|
+print_statement
+    {
+        $$ = $1;
+    }
+;
+
+compound_statement: LBRACKET local_declarations stat_list RBRACKET
+    {
+        if(DEBUG_PRINT_ALL) printf("Compound Statement\n");
+        $$ = makeNode(compStatementNode, -1, NULL, $2, $3, NULL);
+    }
+;
+
+local_declarations: /*empty*/
+    {
+        if(DEBUG_PRINT_ALL) printf("Local Declarations, empty.\n");
+        $$ = makeNode(empLocalDeclarationsNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+local_declarations declaration
+    {
+        if(DEBUG_PRINT_ALL) printf("Local Declarations\n");
+        $$ = makeNode(localDeclarationsNode, -1, NULL, $1, $2, NULL);
+    }
+;
+
+expression_statement: expression SEMICOLON
+    {
+        if(DEBUG_PRINT_ALL) printf("Expression\n");
+        $$ = makeNode(expStatementNode, -1, NULL, $1, NULL, NULL);
+    }
+|
+SEMICOLON
+    {
+        if(DEBUG_PRINT_ALL) printf("Expression, Semicolon only.\n");
+        $$ = makeNode(expStatementSemicolonNode, -1, NULL, NULL, NULL, NULL);
+    }
+;
+
+selection_statement: IF LPAR expression RPAR statement %prec NO_ELSE
+    {
+        if(DEBUG_PRINT_ALL) printf("Selection Statement\n");
+        $$ = makeNode(selStatementNode, -1, NULL, $3, $5, NULL);
+    }
+|
+IF LPAR expression RPAR statement ELSE statement
+    {
+        if(DEBUG_PRINT_ALL) printf("Selection Statement with else\n");
+        $$ = makeNode(selStatementNode, -1, NULL, $3, $5, $7);
+    }
+
+iteration_statement: WHILE LPAR expression RPAR statement
+    {
+        if(DEBUG_PRINT_ALL) printf("Iteration Statement\n");
+        $$ = makeNode(iterStatementNode, -1, NULL, $3, $5, NULL);
+    }
+
+print_statement: PRINT expression
+    {
+        if(DEBUG_PRINT_ALL) printf("Print Expression\n");
+        $$ = makeNode(printStatementNode, -1, NULL, $2, NULL, NULL);
+    }
+
+expression: var ASSIGN expression
+    {
+        if(DEBUG_PRINT_ALL) printf("Expression\n");
+        $$ = makeNode(expAssignNode, -1, NULL, $1, $3, NULL);
+    }
+|
+simple_expression
+    {
+        if(DEBUG_PRINT_ALL) printf("Simple Expression\n");
+        $$ = $1;
+    }
+;
+
+var: ID
+    {
+        if(DEBUG_PRINT_TERMS) printf("ID\n");
+        $$ = makeNode(varNode, -1, $1, NULL, NULL, NULL);
+
+        if(searchForSymbol(INTEGER_TYPE, $1)== -1) {
+            fprintf(stderr, "Error at line %d: Variable %s has not been declared.\n", yylineno, $1);
+            *error = 1;
+        }
+
+    }
+|
+ID LBRACE expression RBRACE
+    {
+        if(DEBUG_PRINT_ALL) printf("Expression with ID and braces\n");
+        $$ = makeNode(varExpressionNode, -1, $1, $3, NULL, NULL);
+
+        if(searchForSymbol(INTEGER_TYPE, $1)== -1) {
+            fprintf(stderr, "Error at line %d: Variable %s has not been declared.\n", yylineno, $1);
+            *error = 1;
+        }
+    }
+;
+
+simple_expression: additive_expression relop additive_expression
+    {
+        if(DEBUG_PRINT_ALL) printf("Simple Expression with Relop\n");
+        $$ = makeNode(simpleExpRelopNode, -1, NULL, $1, $2, $3);
+    }
+|
+additive_expression
+    {
+        if(DEBUG_PRINT_ALL) printf("Simple Expression, additive\n");
+        $$ = $1;
+    }
+;
+
+relop: LESS_EQ
+    {
+        if(DEBUG_PRINT_TERMS) printf("Less or equal\n");
+        $$ = makeNode(leEqNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+LESS
+    {
+        if(DEBUG_PRINT_TERMS) printf("Less\n");
+        $$ = makeNode(leNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+GREATER
+    {
+        if(DEBUG_PRINT_TERMS) printf("Greater\n");
+        $$ = makeNode(grNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+GREATER_EQ
+    {
+        if(DEBUG_PRINT_TERMS) printf("Greater or equal\n");
+        $$ = makeNode(grEqNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+EQ
+    {
+        if(DEBUG_PRINT_TERMS) printf("Equal\n");
+        $$ = makeNode(eqNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+NEQ
+    {
+        if(DEBUG_PRINT_TERMS) printf("Not equal\n");
+        $$ = makeNode(nEqNode, -1, NULL, NULL, NULL, NULL);
+    }
+;
+
+additive_expression: additive_expression addop term
+    {
+        if(DEBUG_PRINT_ALL) printf("Additive Expression\n");
+        $$ = makeNode(addExpressionNode, -1, NULL, $1, $2, $3);
+    }
+|
+term
+    {
+        if(DEBUG_PRINT_TERMS) printf("Additive Expression, term\n");
+        $$ = $1;
+    }
+;
+
+addop: PLUS
+    {
+        if(DEBUG_PRINT_TERMS) printf("Plus\n");
+        $$ = makeNode(plusNode, -1, "NULL", NULL, NULL, NULL);
+    }
+|
+MINUS
+    {
+        if(DEBUG_PRINT_TERMS) printf("Minus\n");
+        $$ = makeNode(minusNode, -1, NULL, NULL, NULL, NULL);
+    }
+;
+
+term: term mulop factor
+    {
+        if(DEBUG_PRINT_TERMS) printf("Term * factor\n");
+        $$ = makeNode(termNode, -1, NULL, $1, $2, $3);
+    }
+|
+factor
+    {
+        if(DEBUG_PRINT_ALL) printf("Factor\n");
+        $$ = $1;
+    }
+;
+
+mulop: MUL
+    {
+        if(DEBUG_PRINT_TERMS) printf("Multiplication\n");
+        $$ = makeNode(mulNode, -1, NULL, NULL, NULL, NULL);
+    }
+|
+DIV
+    {
+        if(DEBUG_PRINT_TERMS) printf("Division\n");
+        $$ = makeNode(divNode, -1, NULL, NULL, NULL, NULL);
+    }
+;
+
+factor: LPAR expression RPAR
+    {
+        if(DEBUG_PRINT_ALL) printf("Factor Expression\n");
+        $$ = makeNode(factorExpressionNode, -1, NULL, $2, NULL, NULL);
+    }
+|
+var
+    {
+        if(DEBUG_PRINT_ALL) printf("Variable\n");
+        $$ = $1;
+    }
+|
+INT_LITERAL
+    {
+        if(DEBUG_PRINT_ALL) printf("Integer literal\n");
+        $$ = makeNode(intLiteralNode, $1, NULL, NULL, NULL, NULL);
+    }
+;
+
+%%
