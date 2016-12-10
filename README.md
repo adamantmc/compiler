@@ -35,6 +35,24 @@ The target machine was MIX (https://en.wikipedia.org/wiki/MIX), and you will nee
 parser and the lexer respectively.
 
 Be forewarned: there are quite a few points where i print debugging messages, and i was too bored to remove them.
-You can compile with ```make.sh``` and test with ```test.sh```.
+
+#Compilation
+You can compile with the ```make.sh``` script:
+```
+yacc -dv syntax.txt
+flex lex.txt
+gcc -g dynstack.c symbol.c code_templates.c tree.c code_gen.c lex.yy.c y.tab.c 
+```
+It first creates the parser, then the lexer, then creates the executable file.
+
+#Usage
+You can run the ```test.sh``` script:
+```
+./a.out < storeAndPrint.txt
+mixasm output.mixal
+mixvm -r output
+```
+To run a program, first you have to use the compiler to create the output.mixal file, which contains the mix assembly.
+Then call the mix assembler (```mixasm```) and finally call mixvm with the machine code file for execution.
 
 The files ```array.txt, expressions.txt, fibonacci.txt, scope.txt, storeAndPrint.txt``` contain example programs that you can run.
