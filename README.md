@@ -30,6 +30,10 @@ term → term mulop factor
 mulop → * | /
 factor → ( expression ) | var | NUM
 ```
+#Semantics
+The value of assign expressions is the value of the right hand side. <br />
+The value of a simple-expression is the value of the additive-expression, or if there is a relop then it is 0 or 1 depending on the outcome of the relop's condition.
+
 The target machine was MIX (https://en.wikipedia.org/wiki/MIX), and you will need to download the MIX Development Kit 
 (https://www.gnu.org/software/mdk/) in order to run the compiler successfully. You will also need yacc and flex, for the
 parser and the lexer respectively.
