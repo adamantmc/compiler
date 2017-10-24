@@ -1,4 +1,4 @@
-#Compiler
+# Compiler
 A project for the Programming Language Design class. We had to make a compiler for the following language:
 ```
 program → declaration-list statement-list
@@ -37,11 +37,11 @@ parser and the lexer respectively.
 
 Be forewarned: there are quite a few points where i print debugging messages, and i was too bored to remove them.
 
-#Semantics
+# Semantics
 The value of assign expressions is the value of the right hand side. <br />
 The value of a simple-expression is the value of the additive-expression, or if there is a relop then it is 0 or 1 depending on the outcome of the relop's condition.
 
-#Compilation
+# Compilation
 You can compile with the ```make.sh``` script:
 ```
 yacc -dv syntax.txt
@@ -50,7 +50,7 @@ gcc -g dynstack.c symbol.c code_templates.c tree.c code_gen.c lex.yy.c y.tab.c
 ```
 It first creates the parser, then the lexer, then creates the executable file.
 
-#Usage
+# Usage
 You can run the ```test.sh``` script:
 ```
 ./a.out < storeAndPrint.txt
